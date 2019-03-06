@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# Loads the index controller
+
+DOCUMENT_ROOT="$(realpath "$(dirname "$0")")/www"
+HTTP_HOST=localhost
+HTTP_REFERER=http://localhost/
+HTTP_USER_AGENT='www.sh-tests/1'
+
+QUERY_STRING='welcome=Test+User'
+SCRIPT_NAME='/'
+REQUEST_URI="$SCRIPT_NAME?$QUERY_STRING"
+
+cd "$DOCUMENT_ROOT"
+source index.cgi </dev/null

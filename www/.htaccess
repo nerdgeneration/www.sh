@@ -1,0 +1,7 @@
+AddHandler cgi-script .cgi
+Options +ExecCGI
+RewriteEngine On
+
+RewriteCond ! -f
+RewriteConf ! -d
+RewriteRule ^ /index.cgi
