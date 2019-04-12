@@ -1,2 +1,6 @@
-echo "<h1>Hello ${_GET['welcome']}</h1>"
-echo "<p>This is a sample controller for /</p>"
+declare -A tmpl
+tmpl['welcome']=$_GET['welcome']
+tmpl['sw']="www.sh $WWWSH_VERSION"
+tmpl['sw-url']="$WWWSH_URL"
+
+printf "%s" "$(view index.html $tmpl)"

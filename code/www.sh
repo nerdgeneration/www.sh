@@ -1,39 +1,68 @@
-# www.sh - Copyright Mark Griffin 2019
-# Please don't actually use this for anything, that would be stupid.
+# bash library, use "source"
 
-WWWSH_VERSION='0.1-alpha'
+# www.sh - the experimental bash web framework
+#
+# Copyright Mark Griffin 2019 (BSD-3 License)
+# http://nerdgeneration.com/www.sh/
+#
+# Let's be absolutely clear: this is a joke project. DO NOT USE THIS FOR
+# ANYTHING, ESPECIALLY ON A PUBLIC FACING SERVER.
+#
+# This is the main library that exposes various "web framework" like
+# functions:
+#   - HTTP status
+#   - HTTP headers
+#   - HTTP response
+#   - Routing
+#   - Templated views
+#   - Pre-filled $_GET and $_POST data
+#
+# This also supports:
+#   - URL encode/decode
+#   - Path checks
+#   - Sanitisation of HTML, SQL
+#   - MySQL database queries
+#
+# Not everything is tested. This should be considered non-functional,
+# it just happens that most of it works. Check back later for tests etc...
+
+WWWSH_VERSION='0.2-alpha'
 WWWSH_URL='http://www.nerdgeneration.com/wwwsh/'
 
 # Some notes:
 # - The aim is to use native bash as much as possible
 # - printf is more secure than echo because you can't tell echo to stop processing parameters
 
-
 # Make bash intolerant of errors
 set -ef -o pipefail
 
 url_decode() {
-    local data="${*//+/ }"   # + to space
-    echo -e "${data//%/\\x}" # %xx to ascii
-    # or: printf '%b' "${1//%/\\x}"
+    local data="${*//+/ }"
+    printf '%b' "${data//%/\\x}"
 }
 
 url_encode() {
     # Modified from https://gist.github.com/cdown/1163649
-    old_lc_collate=$LC_COLLATE
-    LC_COLLATE=C
+    old_lc_collate="$LC_COLLATE"
+    LC_COLLATE="C"
     
     local length="${#1}"
     for (( pos = 0; pos < length; pos++ )); do
         local chr="${1:pos:1}"
-        case $chr in
-            ' ') printf '+' ;;
-            [a-zA-Z0-9.~_-]) printf "%s" "$c" ;;
-            *) printf '%%%02X' "'$c" ;;
+        case "$chr" in
+            ' ')
+                printf '+'
+                ;;
+            [a-zA-Z0-9.~_-])
+                printf "%s" "$chr"
+                ;;
+            *)
+                printf '%%%02X' "'$chr"
+                ;;
         esac
     done
     
-    LC_COLLATE=$old_lc_collate
+    LC_COLLATE="$old_lc_collate"
 }
 
 html() {
@@ -55,14 +84,28 @@ query() {
 }
 
 view() {
-   # TODO Load code/views/$1 and do template expansion somehow
-   return
+    local view="$1"
+    local -n tmpl=$2
+    local template="$(<"../code/views/$view")"
+    
+    for name in ${!tmpl}; do
+        local find="{{$find}}"
+        local replace="${tmpl[$name]}"
+        template="${template/$find/$replace}"
+    done
+    
+    printf "%s" "$template"
 }
 
-path() {
-    local check="$(realpath -e "./$1")"
-    # TODO Clean $1 and ensure it exists in $DOCUMENT_ROOT
-    return
+path_in() {
+    local check="$(realpath --canonicalize-existing --quiet "./$1")"
+    local in="$(realpath --canonicalize-existing --quiet "./$2")"
+    local in_length="${#in}"
+    [[ "${check:1:in_length}" == "$in" ]] && print "%s" "$check"
+}
+
+path_in_www() {
+    path_in "$1" "$DOCUMENT_ROOT/www"
 }
 
 declare -A routes
@@ -89,11 +132,7 @@ http_serve() {
     if [[ ! -z ${routes[$SCRIPT_NAME]} ]]; then
         local controller="${routes[$SCRIPT_NAME]}"
         content="$(source "../code/controllers/$controller.sh")"
-        
     else
-        # TODO Finish this for local file serving too
-        # local filename="$(realpath --canonicalize-existing --quiet "./$SCRIPT_NAME")"
-        # [[ $? == 0 && ... check the filename is in $DOCUMENT_ROOT ]] && send the file
         http_status "404 Not Found"
         content="Not Found"
     fi
@@ -107,6 +146,10 @@ http_serve() {
     printf "\r\n%s\n" "$content"
 }
 
+http_error() {
+    printf "HTTP/1.0 500 Internal Server Error\r\n\r\nInternal Server Error"
+    exit 1
+}
 
 # Parse the query into $_GET
 IFS='&;' read -a query <<< "$QUERY_STRING"
@@ -118,16 +161,15 @@ for name_value_str in "${query[@]}"; do
     _GET["$name"]="$value"
 done
 
-# TODO read in a sourced script seems to break everything
 # Parse the POST into $_POST
-#IFS='&;' read -a query
-#declare -A _POST
-#for name_value_str in "${query[@]}"; do
-#    IFS='=' read -a name_value <<< "$name_value_str"
-#    name="$(url_decode "${name_value[0]}")"
-#    value="$(url_decode "${name_value[1]}")"
-#    _POST["$name"]="$value"
-#done
+IFS='&;' read -a query
+declare -A _POST
+for name_value_str in "${query[@]}"; do
+    IFS='=' read -a name_value <<< "$name_value_str"
+    name="$(url_decode "${name_value[0]}")"
+    value="$(url_decode "${name_value[1]}")"
+    _POST["$name"]="$value"
+done
 
 # Read the .env file
 declare -A _ENV
