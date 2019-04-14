@@ -16,4 +16,6 @@ Supports standard web framework functions:
 - MySQL database queries
 - .env files
 
+NOTE (for macOS): If you're getting an error because of the `declare` command, then you need to run `brew install bash` to upgrade bash to version >= 4.0.
+
 Not everything is tested. This should be considered non-functional, it just happens that most of it works. Check back later for tests etc...
