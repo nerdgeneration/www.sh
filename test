@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 
 # Loads the index controller
+# shellcheck disable=SC2034
 
+# Test content
+CONTENT='welcome=Test+Post%20User'
+HTTP_CONTENT_TYPE='application/x-www-form-urlencoded'
+QUERY_STRING='welcome=Test+Get%20User'
+REQUEST_URI="/?$QUERY_STRING"
+
+# Request based on content
 DOCUMENT_ROOT="$(realpath "$(dirname "$0")")/www"
 HTTP_HOST=localhost
 HTTP_REFERER=http://localhost/
 HTTP_USER_AGENT='www.sh-tests/1'
+SCRIPT_NAME='/index.cgi'
+CONTENT_LENGTH="${#CONTENT}"
 
-QUERY_STRING='welcome=Test+Get%20User'
-SCRIPT_NAME='/'
-REQUEST_URI="$SCRIPT_NAME?$QUERY_STRING"
-
-cd "$DOCUMENT_ROOT"
-echo 'welcome=Test+Post%20User' | source index.cgi
+cd "$DOCUMENT_ROOT" || exit 1
+source index.cgi <<< "$CONTENT"

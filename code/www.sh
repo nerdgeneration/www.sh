@@ -1,4 +1,5 @@
 # bash library, use "source"
+# shellcheck shell=bash
 
 # www.sh - the experimental bash web framework
 #
@@ -26,8 +27,8 @@
 # Not everything is tested. This should be considered non-functional,
 # it just happens that most of it works. Check back later for tests etc...
 
-WWWSH_VERSION='0.2-alpha'
-WWWSH_URL='http://www.nerdgeneration.com/wwwsh/'
+WWWSH_VERSION='0.3-alpha'
+WWWSH_URL='https://github.com/nerdgeneration/www.sh'
 
 # Some notes:
 # - The aim is to use native bash as much as possible
@@ -85,11 +86,9 @@ query() {
 
 view() {
     local view="$1"
-    local -n tmpl=$2
     local template="$(<"../code/views/$view")"
-    
-    for name in ${!tmpl}; do
-        local find="{{$find}}"
+    for name in "${!tmpl[@]}"; do
+        local find="{{$name}}"
         local replace="${tmpl[$name]}"
         template="${template/$find/$replace}"
     done
@@ -125,12 +124,13 @@ http_header() {
 
 http_serve() {
     http_header "Content-Type" "text/html;charset=utf-8"
-    http_header "X-Server" "www.sh/$WWWSH_VERSION ($WWWSH_URL)"
+    http_header "X-Powered-By" "www.sh/$WWWSH_VERSION ($WWWSH_URL)"
 
     # Find route, source controller, capture output
-    [[ "$SCRIPT_NAME" == "" ]] && SCRIPT_NAME="/"
-    if [[ ! -z ${routes[$SCRIPT_NAME]} ]]; then
-        local controller="${routes[$SCRIPT_NAME]}"
+    local request="${REQUEST_URI%%\?*}"
+    [[ "$request" == "" ]] && request="/"
+    if [[ -n ${routes[$request]} ]]; then
+        local controller="${routes[$request]}"
         content="$(source "../code/controllers/$controller.sh")"
     else
         http_status "404 Not Found"
@@ -138,7 +138,7 @@ http_serve() {
     fi
     
     # Output headers
-    printf "HTTP/1.0 %s\r\n" "$http_status_code"
+    printf "Status: %s\r\n" "$http_status_code"
     for name in "${!http_headers[@]}"; do 
         printf "%s: %s\r\n" "$name" "${http_headers[$name]}"; 
     done
@@ -147,30 +147,46 @@ http_serve() {
 }
 
 http_error() {
-    printf "HTTP/1.0 500 Internal Server Error\r\n\r\nInternal Server Error"
+    printf "Status: 500 Internal Server Error\r\n\r\nInternal Server Error"
     exit 1
 }
 
 # Parse the query into $_GET
-IFS='&;' read -a query <<< "$QUERY_STRING"
+IFS='&;' read -r -a query <<< "$QUERY_STRING"
 declare -A _GET
 for name_value_str in "${query[@]}"; do
-    IFS='=' read -a name_value <<< "$name_value_str"
+    IFS='=' read -r -a name_value <<< "$name_value_str"
     name="$(url_decode "${name_value[0]}")"
     value="$(url_decode "${name_value[1]}")"
     _GET["$name"]="$value"
 done
 
 # Parse the POST into $_POST
-IFS='&;' read -a query
+CONTENT_LENGTH="${CONTENT_LENGTH:-0}"
+_POST_DATA=""
 declare -A _POST
-for name_value_str in "${query[@]}"; do
-    IFS='=' read -a name_value <<< "$name_value_str"
-    name="$(url_decode "${name_value[0]}")"
-    value="$(url_decode "${name_value[1]}")"
-    _POST["$name"]="$value"
-done
+if [[ "$CONTENT_LENGTH" -gt 0 ]]; then
+    read -n "$CONTENT_LENGTH" -r _POST_DATA
+    case "$HTTP_CONTENT_TYPE" in
+        "application/x-www-form-urlencoded")
+            IFS='&;' read -n "$CONTENT_LENGTH" -r -a query <<< "$_POST_DATA"
+            for name_value_str in "${query[@]}"; do
+                IFS='=' read -a name_value <<< "$name_value_str"
+                name="$(url_decode "${name_value[0]}")"
+                value="$(url_decode "${name_value[1]}")"
+                _POST["$name"]="$value"
+            done
+            ;;
+        *)
+            ;;
+    esac
+
+fi
 
 # Read the .env file
 declare -A _ENV
 [[ -f ../.env ]] && source ../.env
+
+# Passing associative arrays is poorly implemented and doesn't allow recursion,
+# so we'll use a global instead
+declare -A tmpl

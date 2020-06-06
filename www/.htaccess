@@ -1,7 +1,9 @@
+# Enable CGI handling for .cgi files
 AddHandler cgi-script .cgi
 Options +ExecCGI
-RewriteEngine On
 
-RewriteCond ! -f
-RewriteConf ! -d
-RewriteRule ^ /index.cgi
+# Pass everything except existing files/folders to www.sh
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ /index.cgi [L]
